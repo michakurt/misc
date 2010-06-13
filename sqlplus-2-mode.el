@@ -1,7 +1,8 @@
 (defvar sqlplus-2-hidden-sqlplus-interaction-buffer-name "*sqlplus-2-hidden-interaction*")
 (defvar sqlplus-2-hidden-sqlplus-interaction-buffer nil)
 (defvar sqlplus-2-output-buffer-name "*sqlplus-2-output*")
-(defvar sqlplus-2-output-buffer nil)
+;(defvar sqlplus-2-output-buffer nil)
+
 (defvar sqlplus-2-mode-map
   (let ((sqlplus-2-mode-map (make-keymap)))
     (define-key sqlplus-2-mode-map  [(control return)] 'sqlplus-2-process)
@@ -87,33 +88,66 @@
       (error "Please start sqlplus in this buffer"))))
 
 (defun sqlplus-2-get-or-create-output-buffer ()
-  (if sqlplus-2-output-buffer sqlplus-2-output-buffer
-    (get-buffer-create sqlplus-2-output-buffer-name)))
+    (get-buffer-create sqlplus-2-output-buffer-name))
 
 (defun sqlplus-2-get-or-create-interaction-buffer ()
   (if sqlplus-2-hidden-sqlplus-interaction-buffer sqlplus-2-hidden-sqlplus-interaction-buffer
     (shell (get-buffer-create sqlplus-2-hidden-sqlplus-interaction-buffer-name))))
 
-o(defun sqlplus-2-send-select (sql)
+
+(defun sqlplus-2-command-to-sqlplus (buf cmd)
+  (let* ((process (get-buffer-process buf)))
+    (setq comint-process-echoes nil)
+    (process-send-string process (concat cmd "\n"))
+    (sit-for 1); fuer das echo
+    (while 
+	(let ((o (accept-process-output process 10)))
+	  (sleep 1)
+	  (and
+	   (or
+	    (not o)
+	    (not (with-buffer buf (sqlplus-2-is-sql-prompt-in-current-buffer))))
+	   (y-or-n-p "Continue waiting?"))))))
+  
+(defun sqlplus-2-wait-for-prompt (times)
+  (progn
+    (when (or (= 0 times) nil) (progn (setq sqlplus-2-interrupted nil) (error "Interrupt or timeout")))
+    (if (sqlplus-2-is-sql-prompt-in-current-buffer) t
+      (progn
+	(sleep-for 1)
+	(message (concat "Waiting..." (number-to-string times)))
+	(sqlplus-2-wait-for-prompt (- times 1))))))
+
+(defun sqlplus-2-wrap-select-limit-lines (s)
+  (if (equal "select" (substring s 0 6)) (concat "select * from (" (replace-regexp-in-string "[; ]+$" "" s) ") where rownum < 20;")
+    s))
+
+(defun sqlplus-2-send-select (sql)
   (interactive)
-  (let ((interaction-buffer (sqlplus-2-ensure-sql-prompt (sqlplus-2-get-or-create-interaction-buffer)))
+  (let* ((interaction-buffer (sqlplus-2-ensure-sql-prompt (sqlplus-2-get-or-create-interaction-buffer)))
 	(output-buffer (sqlplus-2-get-or-create-output-buffer)))
     (with-buffer interaction-buffer
       (progn
-	(insert "set feed on lin 32767 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '")
-	(comint-send-input)
+;	(goto-char 1)
 	(erase-buffer)
-	(insert sql)
-	(insert "\n")
+	(insert "set feed on lin 32767 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '\n")
+	(comint-send-input)
+	(sqlplus-2-wait-for-prompt 12)
+	(erase-buffer)
+	(insert (sqlplus-2-wrap-select-limit-lines sql))
+;	(insert "\n")
 	(setq b (point))
 	(comint-send-input)
+;	(sleep 3)
+	(sqlplus-2-wait-for-prompt 12)
+	(goto-char (point-max))
 
-	(while (progn
-		 (if sqlplus-2-interrupted (error "Interrupt")
-		   (progn
-		     (goto-char b)
-		     (sit-for 1)
-		     (not (sqlplus-2-is-sql-prompt-in-current-buffer))))))
+;; 	(while (progn
+;; 		 (if sqlplus-2-interrupted (error "Interrupt")
+;; 		   (progn
+;; 		     (goto-char b)
+;; 		     (sit-for 1)
+;; 		     (not (sqlplus-2-is-sql-prompt-in-current-buffer))))))
 	  
 	(goto-char 1)
 	(if (re-search-forward "\\([0-9]+\\) row[s]* selected." nil t)
@@ -156,8 +190,10 @@ o(defun sqlplus-2-send-select (sql)
 (defun sqlplus-2-process ()
   "nimmt das sql-Kommando entgegen. Wenn es ein select ist, dann dann an sql-send-select uebergeben."
   (interactive)
-  (let ((x (sqlplus-2-mark-current)))
-    (sqlplus-2-send-select (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x))))))
+  (let ((x (sqlplus-2-mark-current))
+	(cb (current-buffer)))
+    (sqlplus-2-send-select (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x))))
+    (switch-to-buffer-other-window cb)))
 
 (defun sqlplus-2-mark-current ()
   "Marks the current SQL for sending to the SQL*Plus process.  Marks are placed around a region defined by empty lines."
