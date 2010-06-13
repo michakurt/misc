@@ -169,7 +169,7 @@
 		   (sqlplus-2-normalize-select-output x))
 		  (sqlplus-2-highlight-first-line))))
 	  (progn
-	    (setq x (buffer-substring-no-properties (search-forward "SQL> " nil t) (point-max)))
+	    (setq x (buffer-substring-no-properties 1 (point-max)))
 	    (with-buffer output-buffer
 	      (progn
 		(erase-buffer)
@@ -193,6 +193,8 @@
   (let ((x (sqlplus-2-mark-current))
 	(cb (current-buffer)))
     (sqlplus-2-send-select (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x))))
+    (switch-to-buffer-other-window cb)
+    (switch-to-buffer-other-window (sqlplus-2-get-or-create-output-buffer))
     (switch-to-buffer-other-window cb)))
 
 (defun sqlplus-2-mark-current ()
