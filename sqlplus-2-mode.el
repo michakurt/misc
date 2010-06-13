@@ -94,7 +94,7 @@
   (if sqlplus-2-hidden-sqlplus-interaction-buffer sqlplus-2-hidden-sqlplus-interaction-buffer
     (shell (get-buffer-create sqlplus-2-hidden-sqlplus-interaction-buffer-name))))
 
-(defun sqlplus-2-send-select (sql)
+o(defun sqlplus-2-send-select (sql)
   (interactive)
   (let ((interaction-buffer (sqlplus-2-ensure-sql-prompt (sqlplus-2-get-or-create-interaction-buffer)))
 	(output-buffer (sqlplus-2-get-or-create-output-buffer)))
@@ -132,7 +132,8 @@
 		     (progn
 		       (insert (mapconcat 'identity q " "))
 		       (insert "\n")))
-		   (sqlplus-2-normalize-select-output x)))))
+		   (sqlplus-2-normalize-select-output x))
+		  (sqlplus-2-highlight-first-line))))
 	  (progn
 	    (setq x (buffer-substring-no-properties (search-forward "SQL> " nil t) (point-max)))
 	    (with-buffer output-buffer
@@ -145,7 +146,13 @@
 (defun sqlplus-2-remove-linebreaks (txt)
   (replace-regexp-in-string "\n" " " txt))
 
-
+(defun sqlplus-2-highlight-first-line ()
+  (save-excursion
+   (progn
+     (goto-char 1)
+     (end-of-line)
+     (put-text-property 1 (point)  'face '(:foreground "yellow")))))
+    
 (defun sqlplus-2-process ()
   "nimmt das sql-Kommando entgegen. Wenn es ein select ist, dann dann an sql-send-select uebergeben."
   (interactive)
