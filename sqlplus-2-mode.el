@@ -1,4 +1,7 @@
-
+(defvar sqlplus-2-hidden-sqlplus-interaction-buffer-name "*sqlplus-2-hidden-interaction*")
+(defvar sqlplus-2-hidden-sqlplus-interaction-buffer nil)
+(defvar sqlplus-2-output-buffer-name "*sqlplus-2-output*")
+(defvar sqlplus-2-output-buffer nil)
 (defvar sqlplus-2-mode-map
   (let ((sqlplus-2-mode-map (make-keymap)))
     (define-key sqlplus-2-mode-map  [(control return)] 'sqlplus-2-process)
@@ -45,7 +48,7 @@
 
 
 (defun sqlplus-2-trimmax (l)
-  (let* ((ltrimmed (mapcar 'chomp l))
+  (let* ((ltrimmed (mapcar 'sqlplus-2-chomp l))
          (max-l (apply 'max (mapcar 'length ltrimmed))))
     (mapcar (lambda (u) (sqlplus-2-fill-with-blank u max-l)) ltrimmed)))
 
@@ -73,14 +76,29 @@
 
     
 (defun sqlplus-2-normalize-select-output (txt)
-  (sqlplus-2-transpose (mapcar 'trimmax (sqlplus-2-transpose (sqlplus-2-parse-select-output- txt) ))))
+  (sqlplus-2-transpose (mapcar 'sqlplus-2-trimmax (sqlplus-2-transpose (sqlplus-2-parse-select-output- txt) ))))
 
+(defun sqlplus-2-is-sql-prompt-in-current-buffer ()
+  (equal "SQL> " (buffer-substring-no-properties (- (point-max) 5) (point-max))))
 
+(defun sqlplus-2-ensure-sql-prompt (buf)
+  (with-buffer buf
+    (if (sqlplus-2-is-sql-prompt-in-current-buffer) buf
+      (error "Please start sqlplus in this buffer"))))
+
+(defun sqlplus-2-get-or-create-output-buffer ()
+  (if sqlplus-2-output-buffer sqlplus-2-output-buffer
+    (get-buffer-create sqlplus-2-output-buffer-name)))
+
+(defun sqlplus-2-get-or-create-interaction-buffer ()
+  (if sqlplus-2-hidden-sqlplus-interaction-buffer sqlplus-2-hidden-sqlplus-interaction-buffer
+    (shell (get-buffer-create sqlplus-2-hidden-sqlplus-interaction-buffer-name))))
 
 (defun sqlplus-2-send-select (sql)
   (interactive)
-  (progn
-    (with-buffer "sql"
+  (let ((interaction-buffer (sqlplus-2-ensure-sql-prompt (sqlplus-2-get-or-create-interaction-buffer)))
+	(output-buffer (sqlplus-2-get-or-create-output-buffer)))
+    (with-buffer interaction-buffer
       (progn
 	(insert "set feed on lin 32767 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '")
 	(comint-send-input)
@@ -95,10 +113,10 @@
 		   (progn
 		     (goto-char b)
 		     (sit-for 1)
-		     (not (equal "SQL> " (buffer-substring-no-properties (- (point-max) 5) (point-max))))))))
+		     (not (sqlplus-2-is-sql-prompt-in-current-buffer))))))
 	  
 	(goto-char 1)
-	(if (re-search-forward "\\([0-9]+\\) rows selected." nil t)
+	(if (re-search-forward "\\([0-9]+\\) row[s]* selected." nil t)
 	    (progn
 	      (setq lines (string-to-number (buffer-substring-no-properties (match-beginning 1) (match-end 1))))
 	      (goto-line (- (count-lines 1 (point)) 1))
@@ -106,7 +124,7 @@
 	      (goto-line (- (count-lines 1 (point)) lines 1))
 	      (setq a (point))
 	      (setq x (buffer-substring-no-properties a e))
-	      (with-buffer "sqlplus-output"
+	      (with-buffer output-buffer
 		(progn
 		  (erase-buffer)
 		  (mapcar
@@ -117,7 +135,7 @@
 		   (sqlplus-2-normalize-select-output x)))))
 	  (progn
 	    (setq x (buffer-substring-no-properties (search-forward "SQL> " nil t) (point-max)))
-	    (with-buffer "sqlplus-output"
+	    (with-buffer output-buffer
 	      (progn
 		(erase-buffer)
 		(insert x)))))))))
