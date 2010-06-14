@@ -138,7 +138,7 @@
 	(insert "alter session set nls_language=american\n")
 	(comint-send-input)
 	(sqlplus-2-wait-for-prompt 12)
-	(insert "set feed on lin 32767 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '\n")
+	(insert "set wrap off feed on lin 32767 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '\n")
 	(comint-send-input)
 	(sqlplus-2-wait-for-prompt 12)
 	(erase-buffer)
