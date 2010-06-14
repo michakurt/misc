@@ -1,3 +1,10 @@
+
+(defcustom sqlplus-2-max-rows 30 "Maximum number of rows that will be returned from a select")
+
+;why does emacs have no tail-call-optimization? :-/
+(setq max-lisp-eval-depth 2000)
+(setq max-specpdl-size 2000)
+
 (defvar sqlplus-2-hidden-sqlplus-interaction-buffer-name "*sqlplus-2-hidden-interaction*")
 (defvar sqlplus-2-hidden-sqlplus-interaction-buffer nil)
 (defvar sqlplus-2-output-buffer-name "*sqlplus-2-output*")
@@ -17,11 +24,7 @@
 
 (define-derived-mode sqlplus-2-mode sql-mode "sqlplus-2"
    "Major mode to edit sql and send it to sqlplus. Does formatting on output of select statements"
-   (use-local-map sqlplus-2-mode-map)
-;   (set (make-local-variable 'font-lock-keywords)
-;        '(sqlplus-2-mode-font-lock-keywords))
-;   (set (make-local-variable 'comment-start) "--"))
-)
+   (use-local-map sqlplus-2-mode-map))
 
 
 (defun sqlplus-2-chomp (str)
@@ -33,11 +36,21 @@
   (string-match "^\\(.*\\S-\\)\\s-*$" str )
   (replace-match "\\1" nil nil str))
 
+;(defun sqlplus-2-fill-with-blank (s l)
+;  (if (< (length s) l)
+;      (sqlplus-2-fill-with-blank (concat s " ") l)
+;    s
+;    ))
+
+;non-recursive version 
 (defun sqlplus-2-fill-with-blank (s l)
-  (if (< (length s) l)
-      (sqlplus-2-fill-with-blank (concat s " ") l)
-    s
-    ))
+  (let* ((result s)
+	 (olen (length s)))
+    (when (< olen l)
+      (dotimes
+	  (x (- l olen) result)
+	(setq result (concat result " "))))
+    result))
 
 (defun sqlplus-2-split-string-to-cols (s l)
   (if (cdr l)
@@ -104,14 +117,15 @@
 (defun sqlplus-2-wait-for-prompt (times)
   (progn
     (when (or (= 0 times) nil) (progn (setq sqlplus-2-interrupted nil) (error "Interrupt or timeout")))
-    (if (sqlplus-2-is-sql-prompt-in-current-buffer) t
+    (if (sqlplus-2-is-sql-prompt-in-current-buffer) (progn (message "Finished.") t)
       (progn
 	(sleep-for 1)
+	(sit-for 1)
 	(message (concat "Waiting..." (number-to-string times)))
 	(sqlplus-2-wait-for-prompt (- times 1))))))
 
 (defun sqlplus-2-wrap-select-limit-lines (s)
-  (if (equal "select" (substring s 0 6)) (concat "select * from (" (replace-regexp-in-string "[; ]+$" "" s) ") where rownum < 20;")
+  (if (equal "select" (substring s 0 6)) (concat "select * from (" (replace-regexp-in-string "[; ]+$" "" s) ") where rownum <= " (number-to-string sqlplus-2-max-rows) ";")
     s))
 
 (defun sqlplus-2-send-statement (sql)
@@ -121,6 +135,9 @@
     (with-buffer interaction-buffer
       (progn
 	(erase-buffer)
+	(insert "alter session set nls_language=american\n")
+	(comint-send-input)
+	(sqlplus-2-wait-for-prompt 12)
 	(insert "set feed on lin 32767 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '\n")
 	(comint-send-input)
 	(sqlplus-2-wait-for-prompt 12)
@@ -140,23 +157,24 @@
 	      (setq e (point))
 	      (goto-line (- (count-lines 1 (point)) lines 1))
 	      (setq a (point))
-	      (setq x (buffer-substring-no-properties a e))
-	      (with-buffer output-buffer
-		(progn
-		  (erase-buffer)
-		  (mapcar
-		   (lambda (q)
-		     (progn
-		       (insert (mapconcat 'identity q " "))
-		       (insert "\n")))
-		   (sqlplus-2-normalize-select-output x))
-		  (sqlplus-2-highlight-first-line))))
+	      (let ((x (buffer-substring-no-properties a e)))
+		(with-buffer output-buffer
+		  (progn
+		    (setq truncate-lines t)
+		    (setq truncate-partial-width-windows nil)
+		    (erase-buffer)
+		    (mapcar
+		     (lambda (q)
+		       (progn
+			 (insert (mapconcat 'identity q " "))
+			 (insert "\n")))
+		     (sqlplus-2-normalize-select-output x))
+		    (sqlplus-2-highlight-first-line)))))
 	  (progn
-	    (setq x (buffer-substring-no-properties 1 (point-max)))
 	    (with-buffer output-buffer
 	      (progn
-		(erase-buffer)
-		(insert x)))))))))
+		(erase-buffer) 
+		(insert (buffer-substring-no-properties 1 (point-max)))))))))))
 
 (defun sqlplus-2-remove-linebreaks (txt)
   (replace-regexp-in-string "\n" " " txt))
