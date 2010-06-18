@@ -16,7 +16,6 @@
     sqlplus-2-mode-map)
   "Keymap for sqlplus-2 major mode")
 
-
 (defvar sqlpus-2-mode-font-lock-keywords
    '(("\\(--.*\\)" 1 'font-lock-comment-face)))
 
@@ -26,6 +25,18 @@
    "Major mode to edit sql and send it to sqlplus. Does formatting on output of select statements"
    (use-local-map sqlplus-2-mode-map))
 
+(defmacro with-buffer (buf form)
+  "Executes FORM in buffer BUF.
+BUF can be a buffer name or a buffer object.
+If the buffer doesn't exist, it's created."
+  `(let ((buffer (gentemp)))
+    (setq buffer
+          (if (stringp ,buf)
+              (get-buffer-create ,buf)
+            ,buf))
+    (save-excursion
+      (set-buffer buffer)
+      ,form)))
 
 (defun sqlplus-2-chomp (str)
   "Chomp leading and tailing whitespace from STR."
@@ -138,7 +149,7 @@
 	(insert "alter session set nls_language=american\n")
 	(comint-send-input)
 	(sqlplus-2-wait-for-prompt 12)
-	(insert "set wrap off feed on lin 32767 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '\n")
+	(insert "set wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '\n")
 	(comint-send-input)
 	(sqlplus-2-wait-for-prompt 12)
 	(erase-buffer)
