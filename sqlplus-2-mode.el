@@ -139,53 +139,67 @@ If the buffer doesn't exist, it's created."
   (if (equal "select" (substring s 0 6)) (concat "select * from (" (replace-regexp-in-string "[; ]+$" "" s) ") where rownum <= " (number-to-string sqlplus-2-max-rows) ";")
     s))
 
+(defun sqlplus-2-write-commands-to-sql-tempfile (loc)
+  "executes the commands in loc (list of strings) and returns the path to the file where they are stored"
+  (let ((temp-file (make-temp-file "sqlplus-2-interaction" nil ".sql")))
+    (with-temp-buffer
+      (mapc (lambda (x) (progn (insert (concat x "\n")))) loc)
+      (write-file temp-file))
+    temp-file))
+
 (defun sqlplus-2-send-statement (sql)
   (interactive)
   (let* ((interaction-buffer (sqlplus-2-ensure-sql-prompt (sqlplus-2-get-or-create-interaction-buffer)))
-	(output-buffer (sqlplus-2-get-or-create-output-buffer)))
+	(output-buffer (sqlplus-2-get-or-create-output-buffer))
+	(output-file (make-temp-file "sqlplus-2-interaction" nil ".lst"))
+	(prologue-and-command (list
+;			       "alter session set nls_language=american"
+			       (concat "spool " output-file " replace")
+			       (sqlplus-2-wrap-select-limit-lines sql)
+			       "spool off"))
+	(temp-file (sqlplus-2-write-commands-to-sql-tempfile prologue-and-command)))
     (with-buffer interaction-buffer
       (progn
 	(erase-buffer)
-	(insert "alter session set nls_language=american\n")
+	(insert "set trimspool off wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on echo off termout off sqlp 'SQL> '\n")
 	(comint-send-input)
 	(sqlplus-2-wait-for-prompt 12)
-	(insert "set wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on sqlp 'SQL> '\n")
+	(insert (concat "@" temp-file))
 	(comint-send-input)
 	(sqlplus-2-wait-for-prompt 12)
-	(erase-buffer)
-	(insert (sqlplus-2-wrap-select-limit-lines sql))
-	(setq b (point))
-	(comint-send-input)
-	(sqlplus-2-wait-for-prompt 12)
+	(delete-file temp-file)
 
-	;If the output is from a  select statement, we call sqlplus-2-normalize-select-output on it and write
-	;the result to the output-buffer. Otherwise we write the plain-result from sqlplus to the output-buffer
-	(goto-char 1)
-	(if (re-search-forward "\\([0-9]+\\) row[s]* selected." nil t)
-	    (progn
-	      (setq lines (string-to-number (buffer-substring-no-properties (match-beginning 1) (match-end 1))))
-	      (goto-line (- (count-lines 1 (point)) 1))
-	      (setq e (point))
-	      (goto-line (- (count-lines 1 (point)) lines 1))
-	      (setq a (point))
-	      (let ((x (buffer-substring-no-properties a e)))
-		(with-buffer output-buffer
-		  (progn
-		    (setq truncate-lines t)
-		    (setq truncate-partial-width-windows nil)
-		    (erase-buffer)
-		    (mapcar
-		     (lambda (q)
-		       (progn
-			 (insert (mapconcat 'identity q " "))
-			 (insert "\n")))
-		     (sqlplus-2-normalize-select-output x))
-		    (sqlplus-2-highlight-first-line)))))
-	  (progn
-	    (with-buffer output-buffer
+	(with-temp-buffer
+	  (insert-file-contents output-file)
+					;If the output is from a  select statement, we call sqlplus-2-normalize-select-output on it and write
+					;the result to the output-buffer. Otherwise we write the plain-result from sqlplus to the output-buffer
+	  (goto-char 1)
+	  (if (re-search-forward "\\([0-9]+\\) row[s]* selected." nil t)
 	      (progn
-		(erase-buffer) 
-		(insert (buffer-substring-no-properties 1 (point-max)))))))))))
+		(setq lines (string-to-number (buffer-substring-no-properties (match-beginning 1) (match-end 1))))
+		(goto-line (- (count-lines 1 (point)) 1))
+		(setq e (point))
+		(goto-line (- (count-lines 1 (point)) lines 1))
+		(setq a (point))
+		(let ((x (buffer-substring-no-properties a e)))
+		  (with-buffer output-buffer
+		    (progn
+		      (setq truncate-lines t)
+		      (setq truncate-partial-width-windows nil)
+		      (erase-buffer)
+		      (mapcar
+		       (lambda (q)
+			 (progn
+			   (insert (mapconcat 'identity q " "))
+			   (insert "\n")))
+		       (sqlplus-2-normalize-select-output x))
+		      (sqlplus-2-highlight-first-line)))))
+	    (progn
+	      (with-buffer output-buffer
+		(progn
+		  (erase-buffer) 
+		  (insert-file-contents output-file))))))))
+    (delete-file output-file)))
 
 (defun sqlplus-2-remove-linebreaks (txt)
   (replace-regexp-in-string "\n" " " txt))
