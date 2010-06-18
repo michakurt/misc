@@ -216,7 +216,7 @@ If the buffer doesn't exist, it's created."
   (interactive)
   (let ((x (sqlplus-2-mark-current))
 	(cb (current-buffer)))
-    (sqlplus-2-send-statement (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x))))
+    (sqlplus-2-send-statement (sqlplus-2-chomp (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x)))))
     (switch-to-buffer-other-window cb)
     (switch-to-buffer-other-window (sqlplus-2-get-or-create-output-buffer))
     (switch-to-buffer-other-window cb)))
