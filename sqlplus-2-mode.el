@@ -25,7 +25,7 @@
    "Major mode to edit sql and send it to sqlplus. Does formatting on output of select statements"
    (use-local-map sqlplus-2-mode-map))
 
-(defmacro with-buffer (buf form)
+(defmacro sqlplus-2-with-buffer (buf form)
   "Executes FORM in buffer BUF.
 BUF can be a buffer name or a buffer object.
 If the buffer doesn't exist, it's created."
@@ -37,6 +37,14 @@ If the buffer doesn't exist, it's created."
     (save-excursion
       (set-buffer buffer)
       ,form)))
+
+(defmacro sqlplus-2-with-file (file form)
+  "Executes FORM in buffer BUF.
+   Deletes file afterwards"
+  `(progn
+     (let ((result ,form))
+       (delete-file ,file)
+       result)))
 
 (defun sqlplus-2-chomp (str)
   "Chomp leading and tailing whitespace from STR."
@@ -100,7 +108,7 @@ If the buffer doesn't exist, it's created."
        (equal "SQL> " (buffer-substring-no-properties (- (point-max) 5) (point-max)))))
 
 (defun sqlplus-2-ensure-sql-prompt (buf)
-  (with-buffer buf
+  (sqlplus-2-with-buffer buf
     (if (sqlplus-2-is-sql-prompt-in-current-buffer) buf
       (error "Please start sqlplus in this buffer and retry."))))
 
@@ -122,7 +130,7 @@ If the buffer doesn't exist, it's created."
 	  (and
 	   (or
 	    (not o)
-	    (not (with-buffer buf (sqlplus-2-is-sql-prompt-in-current-buffer))))
+	    (not (sqlplus-2-with-buffer buf (sqlplus-2-is-sql-prompt-in-current-buffer))))
 	   (y-or-n-p "Continue waiting?"))))))
   
 (defun sqlplus-2-wait-for-prompt (times)
@@ -147,30 +155,36 @@ If the buffer doesn't exist, it's created."
       (write-file temp-file))
     temp-file))
 
-(defun sqlplus-2-send-statement (sql)
-  (interactive)
-  (let* ((interaction-buffer (sqlplus-2-ensure-sql-prompt (sqlplus-2-get-or-create-interaction-buffer)))
-	(output-buffer (sqlplus-2-get-or-create-output-buffer))
-	(output-file (make-temp-file "sqlplus-2-interaction" nil ".lst"))
-	(prologue-and-command (list
-;			       "alter session set nls_language=american"
-			       (concat "spool " output-file " replace")
-			       (sqlplus-2-wrap-select-limit-lines sql)
-			       "spool off"))
-	(temp-file (sqlplus-2-write-commands-to-sql-tempfile prologue-and-command)))
-    (with-buffer interaction-buffer
-      (progn
-	(erase-buffer)
-	(insert "set trimspool off wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on echo off termout off sqlp 'SQL> '\n")
-	(comint-send-input)
-	(sqlplus-2-wait-for-prompt 12)
-	(insert (concat "@" temp-file))
-	(comint-send-input)
-	(sqlplus-2-wait-for-prompt 12)
-	(delete-file temp-file)
 
+
+(defun sqlplus-2-send-statement (sql)
+  "Receives SQL-Statements and returns the path to a file with the results"
+  (let* ((interaction-buffer (sqlplus-2-ensure-sql-prompt (sqlplus-2-get-or-create-interaction-buffer)))
+	 (output-file (make-temp-file "sqlplus-2-interaction" nil ".lst"))
+	 (prologue-and-command (list
+;			       "alter session set nls_language=american"
+				(concat "spool " output-file " replace")
+				(sqlplus-2-wrap-select-limit-lines sql)
+				"spool off"))
+	 (temp-file (sqlplus-2-write-commands-to-sql-tempfile prologue-and-command)))
+    (sqlplus-2-with-file temp-file
+			 (sqlplus-2-with-buffer interaction-buffer
+						(progn
+						  (erase-buffer)
+						  (insert "set trimspool off wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on echo off termout off sqlp 'SQL> '\n")
+						  (comint-send-input)
+						  (sqlplus-2-wait-for-prompt 12)
+						  (insert (concat "@" temp-file))
+						  (comint-send-input)
+						  (sqlplus-2-wait-for-prompt 12))))
+    output-file))
+
+
+(defun sqlplus-2-print-output-to-buffer (result-file)
+  "Expects output from sqlplus in result-file and renders it in output-buffer"
+    (sqlplus-2-with-file result-file
 	(with-temp-buffer
-	  (insert-file-contents output-file)
+	  (insert-file-contents result-file)
 					;If the output is from a  select statement, we call sqlplus-2-normalize-select-output on it and write
 					;the result to the output-buffer. Otherwise we write the plain-result from sqlplus to the output-buffer
 	  (goto-char 1)
@@ -181,25 +195,31 @@ If the buffer doesn't exist, it's created."
 		(setq e (point))
 		(goto-line (- (count-lines 1 (point)) lines 1))
 		(setq a (point))
-		(let ((x (buffer-substring-no-properties a e)))
-		  (with-buffer output-buffer
-		    (progn
-		      (setq truncate-lines t)
-		      (setq truncate-partial-width-windows nil)
-		      (erase-buffer)
-		      (mapcar
-		       (lambda (q)
+		(sqlplus-2-render-select-output (buffer-substring-no-properties a e)))
+	    (sqlplus-2-render-other-output (buffer-string))))))
+
+
+(defun sqlplus-2-render-select-output (x)
+  "Renders the output of a select statement, given in x, in buffer sqlplus-2-output-buffer"
+  (sqlplus-2-with-buffer (sqlplus-2-get-or-create-output-buffer)
 			 (progn
-			   (insert (mapconcat 'identity q " "))
-			   (insert "\n")))
-		       (sqlplus-2-normalize-select-output x))
-		      (sqlplus-2-highlight-first-line)))))
-	    (progn
-	      (with-buffer output-buffer
-		(progn
-		  (erase-buffer) 
-		  (insert-file-contents output-file))))))))
-    (delete-file output-file)))
+			   (setq truncate-lines t)
+			   (setq truncate-partial-width-windows nil)
+			   (erase-buffer)
+			   (mapcar
+			    (lambda (q)
+			      (progn
+				(insert (mapconcat 'identity q " "))
+				(insert "\n")))
+			    (sqlplus-2-normalize-select-output x))
+			   (sqlplus-2-highlight-first-line))))
+  
+(defun sqlplus-2-render-other-output (x)
+  "Just copies x to buffer sqlplus-2-output-buffer"
+  (sqlplus-2-with-buffer (sqlplus-2-get-or-create-output-buffer)
+			 (progn
+			   (erase-buffer)
+			   (insert x))))
 
 (defun sqlplus-2-remove-linebreaks (txt)
   (replace-regexp-in-string "\n" " " txt))
@@ -208,15 +228,20 @@ If the buffer doesn't exist, it's created."
   (save-excursion
    (progn
      (goto-char 1)
-     (end-of-line)
-     (put-text-property 1 (point) 'face '(:foreground "yellow")))))
+     (overlay-put
+      (make-overlay
+       (goto-char 1)
+       (line-end-position))
+      'face font-lock-keyword-face))))
+;     (end-of-line)
+;     (put-text-property 1 (point) 'face '(:foreground "yellow")))))
     
 (defun sqlplus-2-process ()
   "nimmt das sql-Kommando entgegen."
   (interactive)
   (let ((x (sqlplus-2-mark-current))
 	(cb (current-buffer)))
-    (sqlplus-2-send-statement (sqlplus-2-chomp (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x)))))
+    (sqlplus-2-print-output-to-buffer (sqlplus-2-send-statement (sqlplus-2-chomp (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x))))))
     (switch-to-buffer-other-window cb)
     (switch-to-buffer-other-window (sqlplus-2-get-or-create-output-buffer))
     (switch-to-buffer-other-window cb)))
