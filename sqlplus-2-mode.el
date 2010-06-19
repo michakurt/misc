@@ -1,3 +1,4 @@
+(require 'cl)
 
 (defcustom sqlplus-2-max-rows 30 "Maximum number of rows that will be returned from a select")
 
@@ -172,8 +173,8 @@
   (when (not sqlplus-2-sql-parameters-set)
     (progn
       (sqlplus-2-execute-commands-sequentially-in-interaction-buffer
-       (list "set trimspool off wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on echo off termout off sqlp 'SQL> '"
-	     "alter session set nls_language=american"))
+       (list "set trimspool off wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on echo off termout off sqlp 'SQL> ';"
+	     "alter session set nls_language=american;"))
       (setq sqlplus-2-sql-parameters-set t))))
 
 (defun sqlplus-2-send-statement (sql)
