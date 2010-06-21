@@ -47,7 +47,7 @@
 (defun sqlplus-2-chomp (str)
   "Chomp leading and tailing whitespace from STR."
   (let ((s (if (symbolp str) (symbol-name str) str)))
-    (replace-regexp-in-string "\\(^[[:space:]\\n]*\\|[[:space:]\\n]*$\\)" "" s)))
+    (replace-regexp-in-string "\\(^[[:space:]\n]*\\|[[:space:]\n]*$\\)" "" s)))
 
 (defun sqlplus-2-trim-trailing-whitespace (str)
   (string-match "^\\(.*\\S-\\)\\s-*$" str )
@@ -173,7 +173,7 @@
   (when (not sqlplus-2-sql-parameters-set)
     (progn
       (sqlplus-2-execute-commands-sequentially-in-interaction-buffer
-       (list "set trimspool off wrap off feed on lin 1000 tab off emb on pages 0 newp 0 head on echo off termout off sqlp 'SQL> ';"
+       (list "set trimspool off wrap off feed on lin 32767 tab off emb on pages 0 newp 0 head on echo off termout off sqlp 'SQL> ';"
 	     "alter session set nls_language=american;"))
       (setq sqlplus-2-sql-parameters-set t))))
 
