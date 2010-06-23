@@ -3,8 +3,8 @@
 (defcustom sqlplus-2-max-rows 30 "Maximum number of rows that will be returned from a select")
 
 ;why does emacs have no tail-call-optimization? :-/
-(setq max-lisp-eval-depth 2000)
-(setq max-specpdl-size 2000)
+(setq max-lisp-eval-depth 20000)
+(setq max-specpdl-size 20000)
 
 (defvar sqlplus-2-hidden-sqlplus-interaction-buffer-name "*sqlplus-2-hidden-interaction*")
 (defvar sqlplus-2-hidden-sqlplus-interaction-buffer nil)
@@ -236,6 +236,9 @@
 (defun sqlplus-2-remove-linebreaks (txt)
   (replace-regexp-in-string "\n" " " txt))
 
+(defun sqlplus-2-remove-comments (x)
+  (replace-regexp-in-string "--.*$" "" x))
+
 (defun sqlplus-2-highlight-first-line ()
   (save-excursion
    (progn
@@ -251,7 +254,7 @@
   (interactive)
   (let ((x (sqlplus-2-mark-current))
 	(cb (current-buffer)))
-    (sqlplus-2-print-output-to-buffer (sqlplus-2-send-statement (sqlplus-2-chomp (sqlplus-2-remove-linebreaks (buffer-substring-no-properties (car x) (cdr x))))))
+    (sqlplus-2-print-output-to-buffer (sqlplus-2-send-statement (sqlplus-2-chomp (sqlplus-2-remove-linebreaks (sqlplus-2-remove-comments (buffer-substring-no-properties (car x) (cdr x)))))))
     (switch-to-buffer-other-window cb)
     (switch-to-buffer-other-window (sqlplus-2-get-or-create-output-buffer))
     (switch-to-buffer-other-window cb)))
