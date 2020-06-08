@@ -1,18 +1,26 @@
+//Dvorak Layout mit deutschen Umlauten und ein paar ergonomischen Bequemlichkeiten:
+//1. ä wird durch AltGr+a erreicht, Ä durch AltGr+A usw. Ebenso ist ß=AltGr+s
+//2. Die Taste neben der linken Shifttaste (das ist <>| auf einem deutschen Keyboard) ist ebenfalls mit Shift belegt.
+//3. CapsLock und die linke Strg-Taste sind vertauscht.
+//
+//Speichert man diese Datei unter /usr/share/X11/xkb/symbols/us_de_dvorak , kann man das Mapping mit dem Kommando
+//'setxkbmap us_de_dvorak' aktivieren.
+//Will man es in Gnome auswählbar machen, wird es schwierig. Ich habe einfach in /usr/share/X11/xkb/symbols/de einen von
+//mir nicht gebrauchten Eintrag überschrieben.
 partial alphanumeric_keys
 xkb_symbols "dvorak" {
     name[Group1]= "Dvorak US-Layout (with DE umlauts)";
     include "us(dvorak)"
 
-    key <LSGT> {         [       Shift_L ] };
-    key <CAPS> {         [       Control_L ] };
-    key <LCTL> {         [       Caps_Lock ] };
-    key <AC01> { [               a,               A ,adiaeresis,      Adiaeresis ]};
+    key <LSGT> {[               Shift_L ]};
+    key <CAPS> {[               Control_L ]};
+    key <LCTL> {[               Caps_Lock ]};
+    key <AC01> {[               a,               A ,adiaeresis,      Adiaeresis ]};
     key <AC02> {[               o,               O ,odiaeresis,      Odiaeresis ]};
     key <AC03> {[               e,               E ,EuroSign,        NoSymbol ]};
     key <AC04> {[               u,               U ,udiaeresis,      Udiaeresis ]};
     key <AC10> {[               s,               S ,ssharp ]};
      
     include "level3(ralt_switch)"
-
 };
 
