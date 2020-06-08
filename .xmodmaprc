@@ -1,0 +1,22 @@
+clear Lock
+clear Control
+!remove Lock = Caps_Lock
+!remove Control = Control_L
+!keysym Control_L = Caps_Lock
+!keysym Caps_Lock = Control_L
+!add Lock = Caps_Lock
+
+keycode 66 = Control_L
+keycode 105 = Control_R
+keycode 37 = Caps_Lock
+keycode 108 = Mode_switch
+keycode  38 = a A adiaeresis Adiaeresis
+keycode  39 = o O odiaeresis Odiaeresis
+keycode  41 = u U udiaeresis Udiaeresis
+keycode  47 = s S ssharp
+keycode  94 = Shift_L
+keycode  40 = e E EuroSign
+add Shift = Shift_L
+add Control = Control_L
+add Control = Control_R
+
